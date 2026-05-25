@@ -4,7 +4,11 @@ const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // 모든 origin 허용 (본인만 URL 알면 OK)
+app.use(cors());
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 const BINANCE_BASE = "https://fapi.binance.com";
 
