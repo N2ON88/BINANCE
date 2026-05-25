@@ -66,7 +66,7 @@ app.get("/api/open-orders", async (req, res) => {
 app.get("/api/prices", async (req, res) => {
   try {
     const data = await fetch("https://fapi.binance.com/fapi/v1/ticker/price").then(r => r.json());
-    const symbols = ["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT"];
+    const symbols = ["BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","AVAXUSDT","DOTUSDT","LINKUSDT","MATICUSDT","LTCUSDT","UNIUSDT","ATOMUSDT","NEARUSDT","APTUSDT","SUIUSDT","OPUSDT","ARBUSDT","INJUSDT"];
     const result = {};
     data.forEach(t => { if (symbols.includes(t.symbol)) result[t.symbol] = parseFloat(t.price); });
     res.json(result);
@@ -122,7 +122,7 @@ app.post("/api/ai-analyze", async (req, res) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5",
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }],
       }),
