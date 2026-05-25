@@ -470,7 +470,7 @@ async function placeOrder(side,qty=null,sl=null,tp=null){
   const fTp=tp||(side==='BUY'?p*1.03:p*.97);
   try{
     await api('/api/leverage','POST',{symbol:currentSymbol,leverage:lev});
-    await api('/api/margin-type','POST',{symbol:currentSymbol,marginType});
+    try{ await api('/api/margin-type','POST',{symbol:currentSymbol,marginType}); }catch(e){}
     await api('/api/order','POST',{symbol:currentSymbol,side,type:'MARKET',quantity:fQty.toFixed(3),positionSide:'BOTH'});
     await api('/api/order','POST',{symbol:currentSymbol,side:side==='BUY'?'SELL':'BUY',type:'STOP_MARKET',stopPrice:fSl.toFixed(dec),closePosition:'true',positionSide:'BOTH',timeInForce:'GTE_GTC'});
     await api('/api/order','POST',{symbol:currentSymbol,side:side==='BUY'?'SELL':'BUY',type:'TAKE_PROFIT_MARKET',stopPrice:fTp.toFixed(dec),closePosition:'true',positionSide:'BOTH',timeInForce:'GTE_GTC'});
