@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>APEX TRADER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'IBM Plex Mono',monospace;background:#060A10;color:#CBD5E1;max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:20px}
+  input,select{font-family:inherit}input:focus,select:focus{outline:none}
+  input[type=range]{accent-color:#F7931A;width:100%}
+  ::-webkit-scrollbar{width:3px;height:3px}::-webkit-scrollbar-thumb{background:#1E293B}
+  button{font-family:inherit;cursor:pointer}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes slideIn{from{transform:translateY(-8px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .notif{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;animation:slideIn .15s ease;padding:8px 16px;border-radius:8px;font-size:11px;backdrop-filter:blur(10px);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis}
+  .hidden{display:none}.pulse{animation:pulse 2s infinite}
+  .tfBtn{padding:4px 8px;border-radius:5px;font-size:9px;border:1px solid #1E293B;background:transparent;color:#475569;font-family:inherit}
+  .tfBtn.active{border-color:#F7931A;background:rgba(247,147,26,.1);color:#F7931A}
+  .card{background:rgba(255,255,255,.01);border:1px solid #0F172A;border-radius:12px;padding:14px;margin-bottom:12px}
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setupScreen" style="display:flex;flex-direction:column;justify-content:center;padding:24px;min-height:100vh">
+  <div style="text-align:center;margin-bottom:32px">
+    <div style="font-size:42px;margin-bottom:6px">₿</div>
+    <div style="font-size:20px;font-weight:700;color:#F7931A;letter-spacing:.15em">APEX TRADER</div>
+    <div style="font-size:10px;color:#475569;letter-spacing:.2em;margin-top:4px">BINANCE FUTURES · AI POWERED</div>
+  </div>
+  <div style="background:rgba(247,147,26,.05);border:1px solid rgba(247,147,26,.2);border-radius:12px;padding:18px;margin-bottom:14px">
+    <div style="font-size:11px;color:#F7931A;margin-bottom:12px;font-weight:700">Railway 백엔드 URL</div>
+    <input id="urlInput" type="url" placeholder="https://xxxx.up.railway.app"
+      style="width:100%;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:8px;padding:11px 12px;color:#E2E8F0;font-size:12px;margin-bottom:12px">
+    <button onclick="connect()" id="connectBtn"
+      style="width:100%;padding:13px;border-radius:10px;border:1px solid #F7931A;background:rgba(247,147,26,.14);color:#F7931A;font-size:13px;font-weight:700">⚡ 연결하기</button>
+  </div>
+  <div id="connectError" style="display:none;padding:10px 14px;border-radius:8px;font-size:11px;background:rgba(239,68,68,.1);border:1px solid #EF4444;color:#EF4444;margin-bottom:12px"></div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+  <div id="notif" class="notif hidden"></div>
+
+  <!-- Header -->
+  <div style="padding:13px 14px 0;position:sticky;top:0;background:#060A10;z-index:50">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:7px">
+        <span style="color:#F7931A;font-size:16px">₿</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#F1F5F9">APEX TRADER</div>
+          <div id="serverStatus" style="font-size:9px;color:#22C55E">● LIVE · BINANCE FUTURES</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px">
+        <button id="autoServerBtn" onclick="toggleServerAuto()"
+          style="padding:5px 9px;border-radius:6px;font-size:10px;background:rgba(255,255,255,.03);border:1px solid #1E293B;color:#475569">○ AUTO</button>
+        <button onclick="disconnect()"
+          style="padding:5px 9px;border-radius:6px;font-size:10px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.3);color:#EF4444">해제</button>
+      </div>
+    </div>
+    <div style="background:rgba(247,147,26,.04);border:1px solid rgba(247,147,26,.1);border-radius:10px;padding:10px 14px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <div><div style="font-size:8px;color:#475569;margin-bottom:2px">총 잔고</div><div id="balTotal" style="font-size:12px;font-weight:700;color:#F1F5F9">$—</div></div>
+      <div><div style="font-size:8px;color:#475569;margin-bottom:2px">미실현 PnL</div><div id="balPnl" style="font-size:12px;font-weight:700;color:#94A3B8">$—</div></div>
+      <div><div style="font-size:8px;color:#475569;margin-bottom:2px">가용 잔고</div><div id="balAvail" style="font-size:12px;font-weight:700;color:#94A3B8">$—</div></div>
+    </div>
+    <div id="coinSelector" style="display:flex;gap:5px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;padding:0 14px;gap:3px;margin-bottom:12px">
+    <button onclick="switchTab('chart')" id="tab-chart" style="flex:1;padding:7px 2px;border-radius:7px;border:none;font-size:9px;font-weight:700;background:rgba(247,147,26,.12);color:#F7931A;border-bottom:2px solid #F7931A">차트</button>
+    <button onclick="switchTab('ai')"    id="tab-ai"    style="flex:1;padding:7px 2px;border-radius:7px;border:none;font-size:9px;background:rgba(255,255,255,.02);color:#475569;border-bottom:2px solid transparent">AI</button>
+    <button onclick="switchTab('auto')"  id="tab-auto"  style="flex:1;padding:7px 2px;border-radius:7px;border:none;font-size:9px;background:rgba(255,255,255,.02);color:#475569;border-bottom:2px solid transparent">자동</button>
+    <button onclick="switchTab('pos')"   id="tab-pos"   style="flex:1;padding:7px 2px;border-radius:7px;border:none;font-size:9px;background:rgba(255,255,255,.02);color:#475569;border-bottom:2px solid transparent">포지션</button>
+    <button onclick="switchTab('log')"   id="tab-log"   style="flex:1;padding:7px 2px;border-radius:7px;border:none;font-size:9px;background:rgba(255,255,255,.02);color:#475569;border-bottom:2px solid transparent">로그</button>
+  </div>
+
+  <!-- CHART TAB -->
+  <div id="pane-chart" style="padding:0 14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">
+      <div>
+        <div id="symLabel" style="font-size:11px;color:#475569">● Bitcoin Perp</div>
+        <div id="curPrice" style="font-size:26px;font-weight:700;color:#F1F5F9">$—</div>
+      </div>
+      <div id="signalBadge" style="display:none;padding:6px 12px;border-radius:8px;text-align:center">
+        <div id="signalBadgeText" style="font-size:14px;font-weight:800"></div>
+        <div id="signalBadgeConf" style="font-size:9px;color:#64748B"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:5px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none">
+      <button class="tfBtn active" id="tf-1m"  onclick="setTimeframe('1m')">1분</button>
+      <button class="tfBtn"        id="tf-3m"  onclick="setTimeframe('3m')">3분</button>
+      <button class="tfBtn"        id="tf-5m"  onclick="setTimeframe('5m')">5분</button>
+      <button class="tfBtn"        id="tf-15m" onclick="setTimeframe('15m')">15분</button>
+      <button class="tfBtn"        id="tf-30m" onclick="setTimeframe('30m')">30분</button>
+      <button class="tfBtn"        id="tf-1h"  onclick="setTimeframe('1h')">1시간</button>
+      <button class="tfBtn"        id="tf-4h"  onclick="setTimeframe('4h')">4시간</button>
+      <button class="tfBtn"        id="tf-1d"  onclick="setTimeframe('1d')">일봉</button>
+      <button class="tfBtn"        id="tf-1w"  onclick="setTimeframe('1w')">주봉</button>
+    </div>
+    <div style="background:rgba(255,255,255,.01);border:1px solid #0F172A;border-radius:12px;overflow:hidden;margin-bottom:10px">
+      <canvas id="chart" width="402" height="200" style="width:100%;display:block"></canvas>
+    </div>
+
+    <!-- 현재 포지션 (차트 탭) -->
+    <div id="chartPositions"></div>
+
+    <!-- Order panel -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:10px;color:#475569">ORDER</span>
+        <div style="display:flex;gap:5px">
+          <button onclick="setMargin('ISOLATED')" id="mIso" style="padding:2px 7px;border-radius:4px;font-size:9px;border:1px solid #F7931A;background:rgba(247,147,26,.1);color:#F7931A">ISOLATED</button>
+          <button onclick="setMargin('CROSS')"    id="mCross" style="padding:2px 7px;border-radius:4px;font-size:9px;border:1px solid #1E293B;background:transparent;color:#475569">CROSS</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="font-size:9px;color:#475569;margin-bottom:4px">증거금 (USDT)</div>
+          <input type="number" id="orderAmt" value="10"
+            style="width:100%;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:7px;padding:9px 10px;color:#E2E8F0;font-size:12px">
+        </div>
+        <div>
+          <div style="font-size:9px;color:#475569;margin-bottom:4px">레버리지: <span id="levLabel" style="color:#F7931A">10x</span></div>
+          <input type="range" id="levRange" min="1" max="125" value="10"
+            oninput="document.getElementById('levLabel').textContent=this.value+'x';updateOrderInfo()">
+        </div>
+      </div>
+      <div id="orderInfo" style="font-size:9px;color:#334155;margin-bottom:10px">실효: $100 | 수량: —</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="placeOrder('BUY')"  style="flex:1;padding:12px;border-radius:9px;border:1px solid #22C55E;background:rgba(34,197,94,.1);color:#22C55E;font-size:13px;font-weight:700">▲ LONG</button>
+        <button onclick="placeOrder('SELL')" style="flex:1;padding:12px;border-radius:9px;border:1px solid #EF4444;background:rgba(239,68,68,.1);color:#EF4444;font-size:13px;font-weight:700">▼ SHORT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI TAB -->
+  <div id="pane-ai" style="padding:0 14px;display:none">
+    <button onclick="runAI()" id="aiBtn"
+      style="width:100%;padding:13px;border-radius:10px;border:1px solid #F7931A;background:rgba(247,147,26,.1);color:#F7931A;font-size:12px;font-weight:700;margin-bottom:14px">⚡ AI 신호 분석</button>
+    <div id="aiResult" style="display:none"></div>
+    <div id="aiEmpty" style="text-align:center;padding:40px 0;color:#334155">
+      <div style="font-size:36px;margin-bottom:10px">🤖</div>
+      <div style="font-size:12px">버튼을 눌러 AI 분석을 시작하세요</div>
+    </div>
+  </div>
+
+  <!-- AUTO TAB -->
+  <div id="pane-auto" style="padding:0 14px;display:none">
+    <div class="card">
+      <div style="font-size:11px;font-weight:700;color:#F7931A;margin-bottom:14px">🤖 서버 자동매매 설정</div>
+      <div style="background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:8px;padding:10px;font-size:10px;color:#94A3B8;line-height:1.7;margin-bottom:14px">
+        앱을 꺼도 Railway 서버에서 자동으로 분석 · 매매합니다.<br>
+        포지션당 증거금과 레버리지를 설정하세요.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="font-size:9px;color:#475569;margin-bottom:4px">분석 주기 (초)</div>
+          <input type="number" id="autoInterval" value="60" min="30"
+            style="width:100%;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:7px;padding:8px 10px;color:#E2E8F0;font-size:12px">
+        </div>
+        <div>
+          <div style="font-size:9px;color:#475569;margin-bottom:4px">포지션당 증거금 ($)</div>
+          <input type="number" id="autoMargin" value="10" min="1"
+            style="width:100%;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:7px;padding:8px 10px;color:#E2E8F0;font-size:12px">
+        </div>
+        <div>
+          <div style="font-size:9px;color:#475569;margin-bottom:4px">레버리지</div>
+          <input type="number" id="autoLeverage" value="10" min="1" max="125"
+            style="width:100%;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:7px;padding:8px 10px;color:#E2E8F0;font-size:12px">
+        </div>
+        <div>
+          <div style="font-size:9px;color:#475569;margin-bottom:4px">최소 확신도 (%)</div>
+          <input type="number" id="autoConfidence" value="75" min="50" max="100"
+            style="width:100%;background:rgba(255,255,255,.03);border:1px solid #1E293B;border-radius:7px;padding:8px 10px;color:#E2E8F0;font-size:12px">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:9px;color:#475569;margin-bottom:6px">분석 코인 (복수 선택)</div>
+        <div id="autoSymbolBtns" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button onclick="applyAutoConfig(true)"
+          style="flex:1;padding:11px;border-radius:9px;border:1px solid #22C55E;background:rgba(34,197,94,.1);color:#22C55E;font-size:12px;font-weight:700">▶ 자동매매 시작</button>
+        <button onclick="applyAutoConfig(false)"
+          style="flex:1;padding:11px;border-radius:9px;border:1px solid #EF4444;background:rgba(239,68,68,.08);color:#EF4444;font-size:12px;font-weight:700">■ 중지</button>
+      </div>
+      <button onclick="runNow()"
+        style="width:100%;padding:9px;border-radius:8px;border:1px solid #6366F1;background:rgba(99,102,241,.1);color:#818CF8;font-size:11px">⚡ 지금 즉시 1회 실행</button>
+    </div>
+
+    <!-- 자동매매 상태 -->
+    <div class="card">
+      <div style="font-size:10px;font-weight:700;color:#F7931A;margin-bottom:10px">📊 현재 상태</div>
+      <div id="autoStatusPanel" style="font-size:10px;color:#64748B;line-height:2">로딩 중...</div>
+    </div>
+
+    <!-- 자동매매 로그 -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-size:10px;font-weight:700;color:#F7931A">📜 자동매매 로그</span>
+        <button onclick="loadAutoStatus()" style="padding:3px 8px;border-radius:5px;border:1px solid #1E293B;background:transparent;color:#475569;font-size:9px">🔄</button>
+      </div>
+      <div id="autoLogList" style="font-size:10px;color:#64748B">—</div>
+    </div>
+  </div>
+
+  <!-- POSITIONS TAB -->
+  <div id="pane-pos" style="padding:0 14px;display:none">
+    <button onclick="refreshAccount()" style="width:100%;padding:8px;border-radius:8px;margin-bottom:10px;border:1px solid #1E293B;background:rgba(255,255,255,.02);color:#475569;font-size:10px">🔄 새로고침</button>
+    <div id="posList"><div style="text-align:center;padding:40px 0;color:#334155"><div style="font-size:36px;margin-bottom:8px">📋</div><div style="font-size:12px">열린 포지션 없음</div></div></div>
+  </div>
+
+  <!-- LOG TAB -->
+  <div id="pane-log" style="padding:0 14px;display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:10px;color:#475569">ACTIVITY LOG</span>
+      <button onclick="document.getElementById('logList').innerHTML=''" style="padding:4px 8px;border-radius:5px;border:1px solid #1E293B;background:transparent;color:#475569;font-size:9px">초기화</button>
+    </div>
+    <div id="logList"><div style="text-align:center;padding:40px 0;color:#334155"><div style="font-size:36px;margin-bottom:8px">📟</div><div style="font-size:12px">활동 로그 없음</div></div></div>
+  </div>
+</div>
+
+<script>
+const COINS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','AVAXUSDT','DOTUSDT','LINKUSDT','MATICUSDT','LTCUSDT','UNIUSDT','ATOMUSDT','NEARUSDT','APTUSDT','SUIUSDT','OPUSDT','ARBUSDT','INJUSDT'];
+const META={BTCUSDT:{name:'Bitcoin',short:'BTC',color:'#F7931A',dec:1},ETHUSDT:{name:'Ethereum',short:'ETH',color:'#627EEA',dec:2},SOLUSDT:{name:'Solana',short:'SOL',color:'#9945FF',dec:3},BNBUSDT:{name:'BNB',short:'BNB',color:'#F3BA2F',dec:2},XRPUSDT:{name:'XRP',short:'XRP',color:'#00AAE4',dec:4},DOGEUSDT:{name:'Dogecoin',short:'DOGE',color:'#C2A633',dec:5},ADAUSDT:{name:'Cardano',short:'ADA',color:'#0D1E7E',dec:4},AVAXUSDT:{name:'Avalanche',short:'AVAX',color:'#E84142',dec:3},DOTUSDT:{name:'Polkadot',short:'DOT',color:'#E6007A',dec:3},LINKUSDT:{name:'Chainlink',short:'LINK',color:'#2A5ADA',dec:3},MATICUSDT:{name:'Polygon',short:'MATIC',color:'#8247E5',dec:4},LTCUSDT:{name:'Litecoin',short:'LTC',color:'#BFBBBB',dec:2},UNIUSDT:{name:'Uniswap',short:'UNI',color:'#FF007A',dec:3},ATOMUSDT:{name:'Cosmos',short:'ATOM',color:'#6F4E7C',dec:3},NEARUSDT:{name:'NEAR',short:'NEAR',color:'#00C08B',dec:3},APTUSDT:{name:'Aptos',short:'APT',color:'#00BFA5',dec:3},SUIUSDT:{name:'Sui',short:'SUI',color:'#4DA2FF',dec:4},OPUSDT:{name:'Optimism',short:'OP',color:'#FF0420',dec:3},ARBUSDT:{name:'Arbitrum',short:'ARB',color:'#28A0F0',dec:4},INJUSDT:{name:'Injective',short:'INJ',color:'#00BFFF',dec:3}};
+const TF_LABELS={'1m':'1분','3m':'3분','5m':'5분','15m':'15분','30m':'30분','1h':'1시간','4h':'4시간','1d':'일봉','1w':'주봉'};
+const fp=(p,s)=>Number(p).toFixed(META[s]?.dec??2);
+
+let backendUrl='',currentSymbol='BTCUSDT',currentTf='1m';
+let prices={},candles=[],account=null,positions=[],openOrders=[],aiSignal=null;
+let marginType='ISOLATED';
+let selectedAutoSymbols=['BTCUSDT','ETHUSDT','SOLUSDT'];
+let refreshInterval=null,priceInterval=null;
+
+function toast(msg,type='info',ms=3000){
+  const el=document.getElementById('notif');
+  el.textContent=msg;el.className='notif';
+  const c={success:'rgba(34,197,94,.15)',error:'rgba(239,68,68,.15)',info:'rgba(99,102,241,.15)'};
+  const b={success:'#22C55E',error:'#EF4444',info:'#6366F1'};
+  el.style.background=c[type];el.style.border=`1px solid ${b[type]}`;el.style.color=b[type];
+  el.classList.remove('hidden');
+  setTimeout(()=>el.classList.add('hidden'),ms);
+}
+function addLog(msg){
+  const list=document.getElementById('logList');
+  if(list.querySelector('div[style*="padding:40px"]'))list.innerHTML='';
+  const t=new Date().toLocaleTimeString('ko-KR');
+  list.insertAdjacentHTML('afterbegin',`<div style="padding:8px 10px;border-bottom:1px solid #0A0F1A;display:flex;gap:10px"><span style="font-size:9px;color:#334155;flex-shrink:0">${t}</span><span style="font-size:10px;color:#94A3B8;line-height:1.5">${msg}</span></div>`);
+}
+async function api(path,method='GET',body=null){
+  const res=await fetch(backendUrl.replace(/\/$/,'')+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+  const data=await res.json();
+  if(data.error)throw new Error(data.error);
+  if(data.code&&data.code<0)throw new Error(`[${data.code}] ${data.msg}`);
+  return data;
+}
+
+async function connect(){
+  const url=document.getElementById('urlInput').value.trim();
+  if(!url){toast('URL을 입력하세요','error');return;}
+  const btn=document.getElementById('connectBtn');
+  btn.textContent='연결 중…';btn.disabled=true;
+  try{
+    const clean=url.replace(/\/$/,'');
+    const info=await fetch(clean+'/api/account').then(r=>r.json());
+    if(info.error)throw new Error(info.error);
+    backendUrl=clean;localStorage.setItem('apexUrl',clean);
+    account=info;
+    document.getElementById('setupScreen').style.display='none';
+    document.getElementById('mainApp').style.display='block';
+    toast('✅ 연결 성공!','success');addLog('✅ 연결 성공');
+    initApp();
+  }catch(e){
+    const err=document.getElementById('connectError');
+    err.textContent='연결 실패: '+e.message;err.style.display='block';
+    toast('연결 실패: '+e.message,'error',5000);
+  }
+  btn.textContent='⚡ 연결하기';btn.disabled=false;
+}
+function disconnect(){
+  clearInterval(refreshInterval);clearInterval(priceInterval);clearInterval(window._candleInterval);
+  localStorage.removeItem('apexUrl');
+  document.getElementById('mainApp').style.display='none';
+  document.getElementById('setupScreen').style.display='flex';
+}
+
+function initApp(){
+  buildCoinSelector();buildAutoSymbolBtns();
+  fetchPrices();priceInterval=setInterval(fetchPrices,3000);
+  loadCandles();
+  refreshAccount();refreshInterval=setInterval(refreshAccount,5000);
+  setInterval(loadAutoStatus,10000);
+  loadAutoStatus();
+  document.getElementById('orderAmt').addEventListener('input',updateOrderInfo);
+}
+
+async function fetchPrices(){
+  try{
+    const data=await api('/api/prices');
+    COINS.forEach(c=>{
+      if(data[c]){
+        const prev=prices[c];prices[c]=data[c];
+        const el=document.getElementById('price-'+c);
+        if(el){el.style.color=prev&&data[c]>prev?'#22C55E':prev&&data[c]<prev?'#EF4444':'#475569';el.textContent='$'+fp(data[c],c);}
+        if(c===currentSymbol){document.getElementById('curPrice').textContent='$'+fp(data[c],c);updateOrderInfo();}
+      }
+    });
+  }catch(e){}
+}
+
+function buildCoinSelector(){
+  const el=document.getElementById('coinSelector');
+  el.innerHTML=COINS.map(c=>{
+    const m=META[c]||{short:c,color:'#94A3B8'};const sel=c===currentSymbol;
+    return `<div onclick="selectCoin('${c}')" id="coin-${c}" style="flex-shrink:0;padding:6px 10px;border-radius:8px;cursor:pointer;background:${sel?m.color+'18':'rgba(255,255,255,.02)'};border:1px solid ${sel?m.color:'#1E293B'}">
+      <div style="font-size:10px;font-weight:700;color:${sel?m.color:'#64748B'}">${m.short}</div>
+      <div id="price-${c}" style="font-size:9px;color:#475569">${prices[c]?'$'+fp(prices[c],c):'…'}</div>
+    </div>`;
+  }).join('');
+}
+function selectCoin(sym){
+  currentSymbol=sym;aiSignal=null;buildCoinSelector();
+  const m=META[sym]||{name:sym,color:'#94A3B8'};
+  document.getElementById('symLabel').innerHTML=`<span style="color:${m.color}">● </span>${m.name} Perp`;
+  loadCandles();updateSignalBadge();updateOrderInfo();
+}
+function setTimeframe(tf){
+  currentTf=tf;
+  document.querySelectorAll('.tfBtn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tf-'+tf)?.classList.add('active');
+  loadCandles();
+}
+
+async function loadCandles(){
+  clearInterval(window._candleInterval);
+  try{
+    candles=await api(`/api/candles?symbol=${currentSymbol}&interval=${currentTf}&limit=100`);
+    drawChart();
+    const ms=['1m','3m','5m'].includes(currentTf)?10000:30000;
+    window._candleInterval=setInterval(async()=>{
+      try{
+        const fresh=await api(`/api/candles?symbol=${currentSymbol}&interval=${currentTf}&limit=3`);
+        if(fresh&&fresh.length){
+          fresh.forEach(c=>{const idx=candles.findIndex(x=>x.time===c.time);if(idx>=0)candles[idx]=c;else candles.push(c);});
+          if(candles.length>100)candles=candles.slice(-100);drawChart();
+        }
+      }catch(e){}
+    },ms);
+  }catch(e){}
+}
+
+function drawChart(){
+  const canvas=document.getElementById('chart');
+  if(!canvas||candles.length<2)return;
+  const ctx=canvas.getContext('2d');const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const vis=candles.slice(-60);
+  const allP=vis.flatMap(c=>[c.high,c.low]);
+  const minP=Math.min(...allP),maxP=Math.max(...allP),rng=maxP-minP||1;
+  const pad={t:8,b:26,l:4,r:58};const cW=(W-pad.l-pad.r)/vis.length;
+  const toY=p=>pad.t+(1-(p-minP)/rng)*(H-pad.t-pad.b);
+  ctx.font='8px monospace';
+  for(let i=0;i<=4;i++){const p=minP+(rng/4)*i,y=toY(p);ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();ctx.fillStyle='#374151';ctx.textAlign='left';ctx.fillText('$'+(p>100?p.toFixed(0):p.toFixed(4)),W-pad.r+3,y+3);}
+  vis.forEach((c,i)=>{const x=pad.l+i*cW+cW/2,bull=c.close>=c.open,col=bull?'#26A69A':'#EF5350';ctx.strokeStyle=col;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,toY(c.high));ctx.lineTo(x,toY(c.low));ctx.stroke();const bY=Math.min(toY(c.open),toY(c.close)),bH=Math.abs(toY(c.open)-toY(c.close))||1;ctx.fillStyle=col;ctx.fillRect(x-cW*.35,bY,cW*.7,bH);});
+  ctx.strokeStyle='rgba(251,191,36,.6)';ctx.lineWidth=1.2;ctx.setLineDash([]);ctx.beginPath();vis.forEach((_,i)=>{if(i<19)return;const ma=vis.slice(i-19,i+1).reduce((s,c)=>s+c.close,0)/20;const x=pad.l+i*cW+cW/2;i===19?ctx.moveTo(x,toY(ma)):ctx.lineTo(x,toY(ma));});ctx.stroke();
+  ctx.strokeStyle='rgba(99,102,241,.6)';ctx.lineWidth=1;ctx.beginPath();vis.forEach((_,i)=>{if(i<6)return;const ma=vis.slice(i-6,i+1).reduce((s,c)=>s+c.close,0)/7;const x=pad.l+i*cW+cW/2;i===6?ctx.moveTo(x,toY(ma)):ctx.lineTo(x,toY(ma));});ctx.stroke();
+  const cur=vis[vis.length-1]?.close;
+  if(cur){const col=cur>=(vis[vis.length-2]?.close||cur)?'#26A69A':'#EF5350';ctx.strokeStyle=col;ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(pad.l,toY(cur));ctx.lineTo(W-pad.r,toY(cur));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=col;ctx.fillRect(W-pad.r,toY(cur)-7,pad.r-1,14);ctx.fillStyle='#000';ctx.font='8px monospace';ctx.textAlign='center';ctx.fillText('$'+fp(cur,currentSymbol),W-pad.r/2,toY(cur)+3);}
+  if(aiSignal?.symbol===currentSymbol){if(aiSignal.stopLoss){ctx.strokeStyle='rgba(239,68,68,.5)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(pad.l,toY(aiSignal.stopLoss));ctx.lineTo(W-pad.r,toY(aiSignal.stopLoss));ctx.stroke();}if(aiSignal.takeProfit){ctx.strokeStyle='rgba(38,166,154,.5)';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(pad.l,toY(aiSignal.takeProfit));ctx.lineTo(W-pad.r,toY(aiSignal.takeProfit));ctx.stroke();}ctx.setLineDash([]);}
+  ctx.fillStyle='rgba(247,147,26,.6)';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText(TF_LABELS[currentTf]||currentTf,pad.l+4,pad.t+12);
+}
+
+async function refreshAccount(){
+  try{
+    const [acct,pos,ord]=await Promise.all([api('/api/account'),api('/api/positions'),api('/api/open-orders')]);
+    account=acct;positions=(pos||[]).filter(p=>parseFloat(p.positionAmt)!==0);openOrders=ord||[];
+    const total=parseFloat(acct.totalWalletBalance||0);const pnl=parseFloat(acct.totalUnrealizedProfit||0);const avail=parseFloat(acct.availableBalance||0);
+    document.getElementById('balTotal').textContent='$'+total.toFixed(2);
+    const pnlEl=document.getElementById('balPnl');pnlEl.textContent=(pnl>=0?'+':'')+'$'+pnl.toFixed(2);pnlEl.style.color=pnl>=0?'#22C55E':'#EF4444';
+    document.getElementById('balAvail').textContent='$'+avail.toFixed(2);
+    document.getElementById('tab-pos').textContent='포지션'+(positions.length?`(${positions.length})`:'');
+    renderChartPositions();
+  }catch(e){}
+}
+
+// 차트 탭 포지션 미니 패널
+function renderChartPositions(){
+  const el=document.getElementById('chartPositions');
+  const myPos=positions.filter(p=>p.symbol===currentSymbol);
+  if(!myPos.length){el.innerHTML='';return;}
+  el.innerHTML=myPos.map(pos=>{
+    const pnl=parseFloat(pos.unRealizedProfit);
+    const side=parseFloat(pos.positionAmt)>0?'LONG':'SHORT';
+    const closeSide=parseFloat(pos.positionAmt)>0?'SELL':'BUY';
+    return `<div style="background:${pnl>=0?'rgba(34,197,94,.06)':'rgba(239,68,68,.06)'};border:1px solid ${pnl>=0?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)'};border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:10px;font-weight:700;color:${pnl>=0?'#22C55E':'#EF4444'}">${side} ${pos.leverage}x</span>
+          <span style="font-size:9px;color:#475569">진입 $${fp(pos.entryPrice,pos.symbol)}</span>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:${pnl>=0?'#22C55E':'#EF4444'}">${pnl>=0?'+':''}$${pnl.toFixed(2)} <span style="font-size:9px">(${parseFloat(pos.percentage||0).toFixed(1)}%)</span></div>
+      </div>
+      <button onclick="quickClose('${pos.symbol}',${pos.positionAmt},'${closeSide}')"
+        style="padding:8px 12px;border-radius:8px;border:1px solid ${pnl>=0?'#22C55E':'#EF4444'};background:${pnl>=0?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'};color:${pnl>=0?'#22C55E':'#EF4444'};font-size:11px;font-weight:700">청산</button>
+    </div>`;
+  }).join('');
+}
+
+async function quickClose(sym,amt,side){
+  try{
+    await api('/api/close-position','POST',{symbol:sym,positionAmt:amt});
+    toast('✅ 포지션 청산 완료','success');addLog(`⬜ 청산 ${sym}`);
+    await refreshAccount();
+  }catch(e){toast('청산 오류: '+e.message,'error',5000);}
+}
+
+function updateOrderInfo(){
+  const amt=parseFloat(document.getElementById('orderAmt').value)||0;
+  const lev=parseInt(document.getElementById('levRange').value)||1;
+  const p=prices[currentSymbol]||0;
+  const qty=p?(amt/p*lev).toFixed(4):'—';
+  document.getElementById('orderInfo').innerHTML=`실효: <span style="color:#F7931A">$${(amt*lev).toFixed(0)}</span> | 수량: <span style="color:#94A3B8">${qty} ${META[currentSymbol]?.short||''}</span>`;
+}
+function setMargin(type){
+  marginType=type;
+  const iso=type==='ISOLATED';
+  document.getElementById('mIso').style.cssText+=`;border:1px solid ${iso?'#F7931A':'#1E293B'};background:${iso?'rgba(247,147,26,.1)':'transparent'};color:${iso?'#F7931A':'#475569'}`;
+  document.getElementById('mCross').style.cssText+=`;border:1px solid ${!iso?'#F7931A':'#1E293B'};background:${!iso?'rgba(247,147,26,.1)':'transparent'};color:${!iso?'#F7931A':'#475569'}`;
+}
+
+async function placeOrder(side,qty=null,sl=null,tp=null){
+  const p=prices[currentSymbol]||0;if(!p){toast('가격 로딩 중...','info');return;}
+  const amt=parseFloat(document.getElementById('orderAmt').value)||10;
+  const lev=parseInt(document.getElementById('levRange').value)||10;
+  const dec=META[currentSymbol]?.dec||2;
+  const fQty=qty||(amt/p*lev);
+  const fSl=sl||(side==='BUY'?p*.98:p*1.02);
+  const fTp=tp||(side==='BUY'?p*1.03:p*.97);
+  try{
+    await api('/api/leverage','POST',{symbol:currentSymbol,leverage:lev});
+    try{await api('/api/margin-type','POST',{symbol:currentSymbol,marginType});}catch(e){}
+    await api('/api/order','POST',{symbol:currentSymbol,side,type:'MARKET',quantity:fQty.toFixed(3),positionSide:'BOTH'});
+    await api('/api/order','POST',{symbol:currentSymbol,side:side==='BUY'?'SELL':'BUY',type:'STOP_MARKET',stopPrice:fSl.toFixed(dec),closePosition:'true',positionSide:'BOTH',timeInForce:'GTE_GTC'});
+    await api('/api/order','POST',{symbol:currentSymbol,side:side==='BUY'?'SELL':'BUY',type:'TAKE_PROFIT_MARKET',stopPrice:fTp.toFixed(dec),closePosition:'true',positionSide:'BOTH',timeInForce:'GTE_GTC'});
+    toast(`✅ ${side==='BUY'?'LONG':'SHORT'} 체결!`,'success');
+    addLog(`${side==='BUY'?'🟢 LONG':'🔴 SHORT'} ${currentSymbol} x${lev} qty:${fQty.toFixed(4)}`);
+    await refreshAccount();
+  }catch(e){toast('주문 오류: '+e.message,'error',6000);addLog('❌ '+e.message);}
+}
+
+function renderPositions(){
+  const el=document.getElementById('posList');
+  if(!positions.length){el.innerHTML='<div style="text-align:center;padding:40px 0;color:#334155"><div style="font-size:36px;margin-bottom:8px">📋</div><div style="font-size:12px">열린 포지션 없음</div></div>';return;}
+  el.innerHTML=positions.map(pos=>{
+    const pnl=parseFloat(pos.unRealizedProfit),side=parseFloat(pos.positionAmt)>0?'LONG':'SHORT';
+    const m=META[pos.symbol]||{color:'#94A3B8',short:pos.symbol};
+    return `<div style="background:rgba(255,255,255,.01);border:1px solid ${pnl>=0?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)'};border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:7px;height:7px;border-radius:50%;background:${m.color}"></div>
+          <span style="font-size:12px;font-weight:700">${pos.symbol}</span>
+          <span style="padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;background:${side==='LONG'?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'};color:${side==='LONG'?'#22C55E':'#EF4444'}">${side} ${pos.leverage}x</span>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:700;color:${pnl>=0?'#22C55E':'#EF4444'}">${pnl>=0?'+':''}$${pnl.toFixed(2)}</div>
+          <div style="font-size:9px;color:${pnl>=0?'#22C55E':'#EF4444'}">ROE ${parseFloat(pos.percentage||0).toFixed(2)}%</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="background:rgba(255,255,255,.02);border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#475569">진입가</div><div style="font-size:10px;font-weight:600;color:#CBD5E1">$${fp(pos.entryPrice,pos.symbol)}</div></div>
+        <div style="background:rgba(255,255,255,.02);border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#475569">현재가</div><div style="font-size:10px;font-weight:600;color:#CBD5E1">$${fp(pos.markPrice,pos.symbol)}</div></div>
+        <div style="background:rgba(255,255,255,.02);border-radius:6px;padding:6px 8px"><div style="font-size:8px;color:#475569">수량</div><div style="font-size:10px;font-weight:600;color:#CBD5E1">${Math.abs(parseFloat(pos.positionAmt)).toFixed(4)}</div></div>
+      </div>
+      <button onclick="quickClose('${pos.symbol}',${pos.positionAmt},'${parseFloat(pos.positionAmt)>0?'SELL':'BUY'}')" style="width:100%;padding:9px;border-radius:7px;border:1px solid #EF4444;background:rgba(239,68,68,.08);color:#EF4444;font-size:11px;font-weight:700">⬜ 시장가 청산</button>
+    </div>`;
+  }).join('');
+}
+
+// 자동매매 심볼 버튼
+function buildAutoSymbolBtns(){
+  const el=document.getElementById('autoSymbolBtns');
+  const shorts=['BTC','ETH','SOL','BNB','XRP','DOGE','ADA','AVAX','DOT','LINK','ARB','OP','INJ','APT','SUI'];
+  el.innerHTML=shorts.map(s=>{
+    const sym=s+'USDT';const sel=selectedAutoSymbols.includes(sym);
+    const m=META[sym]||{color:'#94A3B8'};
+    return `<button onclick="toggleAutoSymbol('${sym}')" id="asym-${sym}" style="padding:4px 8px;border-radius:5px;font-size:9px;border:1px solid ${sel?m.color:'#1E293B'};background:${sel?m.color+'18':'transparent'};color:${sel?m.color:'#475569'};font-family:inherit">${s}</button>`;
+  }).join('');
+}
+function toggleAutoSymbol(sym){
+  if(selectedAutoSymbols.includes(sym)) selectedAutoSymbols=selectedAutoSymbols.filter(s=>s!==sym);
+  else selectedAutoSymbols.push(sym);
+  buildAutoSymbolBtns();
+}
+
+async function applyAutoConfig(enable){
+  try{
+    const cfg={
+      enabled:enable,
+      interval:parseInt(document.getElementById('autoInterval').value)||60,
+      symbols:selectedAutoSymbols,
+      leverage:parseInt(document.getElementById('autoLeverage').value)||10,
+      marginUsdt:parseFloat(document.getElementById('autoMargin').value)||10,
+      minConfidence:parseInt(document.getElementById('autoConfidence').value)||75,
+    };
+    await api('/api/auto/config','POST',cfg);
+    toast(enable?'✅ 자동매매 시작됨':'⏹ 자동매매 중지됨', enable?'success':'info');
+    // 헤더 버튼 업데이트
+    const btn=document.getElementById('autoServerBtn');
+    btn.textContent=enable?'● AUTO':'○ AUTO';
+    btn.style.background=enable?'rgba(34,197,94,.1)':'rgba(255,255,255,.03)';
+    btn.style.border=`1px solid ${enable?'#22C55E':'#1E293B'}`;
+    btn.style.color=enable?'#22C55E':'#475569';
+    loadAutoStatus();
+  }catch(e){toast('오류: '+e.message,'error');}
+}
+
+async function toggleServerAuto(){
+  try{
+    const status=await api('/api/auto/status');
+    applyAutoConfig(!status.enabled);
+  }catch(e){}
+}
+
+async function runNow(){
+  try{await api('/api/auto/run-now','POST');toast('▶ 즉시 분석 실행됨','info');setTimeout(loadAutoStatus,3000);}
+  catch(e){toast('오류: '+e.message,'error');}
+}
+
+async function loadAutoStatus(){
+  try{
+    const s=await api('/api/auto/status');
+    // 헤더 버튼
+    const btn=document.getElementById('autoServerBtn');
+    btn.textContent=s.enabled?'● AUTO':'○ AUTO';
+    btn.style.background=s.enabled?'rgba(34,197,94,.1)':'rgba(255,255,255,.03)';
+    btn.style.border=`1px solid ${s.enabled?'#22C55E':'#1E293B'}`;
+    btn.style.color=s.enabled?'#22C55E':'#475569';
+    // 상태 패널
+    document.getElementById('autoStatusPanel').innerHTML=`
+      <div>상태: <span style="color:${s.enabled?'#22C55E':'#EF4444'}">${s.enabled?'● 실행 중':'● 중지됨'}</span></div>
+      <div>분석 코인: <span style="color:#CBD5E1">${(s.symbols||[]).join(', ')}</span></div>
+      <div>주기: <span style="color:#CBD5E1">${s.interval}초</span> | 레버리지: <span style="color:#CBD5E1">${s.leverage}x</span> | 증거금: <span style="color:#CBD5E1">$${s.marginUsdt}</span></div>
+      <div>최소 확신도: <span style="color:#CBD5E1">${s.minConfidence}%</span></div>
+      <div>마지막 실행: <span style="color:#94A3B8">${s.lastRun||'없음'}</span></div>
+      <div>다음 실행: <span style="color:#94A3B8">${s.nextRun||'—'}</span></div>`;
+    // 로그
+    const logEl=document.getElementById('autoLogList');
+    if(s.logs&&s.logs.length){
+      logEl.innerHTML=s.logs.slice(0,20).map(l=>`<div style="padding:6px 0;border-bottom:1px solid #0A0F1A;display:flex;gap:8px"><span style="font-size:9px;color:#334155;flex-shrink:0">${l.time}</span><span style="font-size:10px;color:#94A3B8">${l.msg}</span></div>`).join('');
+    }else{logEl.textContent='로그 없음';}
+  }catch(e){}
+}
+
+// AI
+function calcRSI(cl,n=14){if(cl.length<n+1)return 50;let g=0,l=0;for(let i=cl.length-n;i<cl.length;i++){const d=cl[i]-cl[i-1];d>0?(g+=d):(l-=d);}return 100-100/(1+g/(l||1e-9));}
+function calcATR(hi,lo,cl,n=14){const trs=hi.slice(-n).map((h,i)=>{const idx=hi.length-n+i;return Math.max(h-lo[idx],Math.abs(h-(cl[idx-1]??cl[idx])),Math.abs(lo[idx]-(cl[idx-1]??cl[idx])));});return trs.reduce((a,b)=>a+b,0)/(trs.length||1);}
+
+async function runAI(auto=false){
+  if(!candles.length)return;
+  const btn=document.getElementById('aiBtn');
+  if(!auto){btn.textContent='분석 중···';btn.disabled=true;}
+  try{
+    const cur=prices[currentSymbol]||candles[candles.length-1]?.close;
+    const rec=candles.slice(-30);
+    const cl=rec.map(c=>c.close),hi=rec.map(c=>c.high),lo=rec.map(c=>c.low),vols=rec.map(c=>c.vol);
+    const rsi=calcRSI(cl),atr=calcATR(hi,lo,cl);
+    const ma7=cl.slice(-7).reduce((a,b)=>a+b,0)/7,ma20=cl.reduce((a,b)=>a+b,0)/cl.length;
+    const avgV=vols.slice(-10).reduce((a,b)=>a+b,0)/10,vSpk=vols[vols.length-1]/avgV;
+    const ema12=cl.slice(-12).reduce((a,b,i)=>i===0?b:a*(11/13)+b*(2/13),cl[cl.length-12]);
+    const ema26=cl.reduce((a,b,i)=>i===0?b:a*(25/27)+b*(2/27),cl[0]);
+    const macd=ema12-ema26;
+    const activePos=positions.find(p=>p.symbol===currentSymbol);
+    const prompt=`당신은 바이낸스 선물 퀀트 트레이더입니다. 순수 JSON만 반환하세요 (마크다운 없이).
+코인: ${currentSymbol} | 타임프레임: ${TF_LABELS[currentTf]||currentTf} | 현재가: ${cur}
+MA7: ${ma7.toFixed(4)} | MA20: ${ma20.toFixed(4)} | RSI: ${rsi.toFixed(1)} | ATR: ${atr.toFixed(4)} | MACD: ${macd.toFixed(4)}
+거래량스파이크: ${vSpk.toFixed(2)}x | 최근5봉: ${cl.slice(-5).map(p=>p.toFixed(2)).join(',')}
+가용잔고: ${account?.availableBalance||'N/A'} USDT | 현재포지션: ${activePos?`${parseFloat(activePos.positionAmt)>0?'LONG':'SHORT'} ${activePos.positionAmt}`:'없음'}
+규칙: ATR기반 SL, RR≥1.5, 확신<70이면 HOLD, 포지션있으면 HOLD.
+{"signal":"LONG|SHORT|HOLD","confidence":0-100,"entry":숫자,"stopLoss":숫자,"takeProfit":숫자,"reasoning":"한국어 2-3문장","trend":"BULLISH|BEARISH|NEUTRAL","riskLevel":"LOW|MEDIUM|HIGH","rsiStatus":"OVERSOLD|NEUTRAL|OVERBOUGHT","macdBias":"BULLISH|BEARISH"}`;
+    const r=await api('/api/ai-analyze','POST',{prompt});
+    const sig=JSON.parse(r.result.replace(/```json|```/g,'').trim());
+    aiSignal={...sig,symbol:currentSymbol,timestamp:Date.now(),currentPrice:cur};
+    addLog(`🤖 ${sig.signal} ${currentSymbol}(${TF_LABELS[currentTf]}) ${sig.confidence}%`);
+    renderAiSignal();updateSignalBadge();drawChart();
+  }catch(e){if(!auto)toast('AI 오류: '+e.message,'error',6000);console.error(e);}
+  if(!auto){btn.textContent='⚡ AI 신호 분석';btn.disabled=false;}
+}
+
+function renderAiSignal(){
+  const el=document.getElementById('aiResult'),emEl=document.getElementById('aiEmpty');
+  if(!aiSignal){el.style.display='none';emEl.style.display='block';return;}
+  emEl.style.display='none';el.style.display='block';
+  const s=aiSignal;
+  const sigCol=s.signal==='LONG'?'#22C55E':s.signal==='SHORT'?'#EF4444':'#94A3B8';
+  const confCol=s.confidence>=75?'#22C55E':s.confidence>=55?'#F7931A':'#EF4444';
+  el.innerHTML=`<div style="background:${s.signal==='LONG'?'linear-gradient(135deg,rgba(34,197,94,.08),transparent)':s.signal==='SHORT'?'linear-gradient(135deg,rgba(239,68,68,.08),transparent)':'rgba(255,255,255,.02)'};border:1px solid ${s.signal==='LONG'?'rgba(34,197,94,.25)':s.signal==='SHORT'?'rgba(239,68,68,.25)':'#1E293B'};border-radius:14px;padding:16px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div><div style="font-size:28px;font-weight:800;color:${sigCol}">${s.signal==='LONG'?'▲ LONG':s.signal==='SHORT'?'▼ SHORT':'◆ HOLD'}</div><div style="font-size:9px;color:#475569;margin-top:2px">${s.symbol} · ${TF_LABELS[currentTf]||currentTf} · ${new Date(s.timestamp).toLocaleTimeString('ko-KR')}</div></div>
+      <div style="text-align:right"><div style="font-size:30px;font-weight:800;color:${confCol}">${s.confidence}%</div><div style="font-size:9px;color:#475569">확신도</div></div>
+    </div>
+    <div style="background:#0F172A;border-radius:3px;height:3px;margin-bottom:14px"><div style="height:100%;border-radius:3px;width:${s.confidence}%;background:${confCol};transition:width .8s"></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px">
+      <div style="background:rgba(255,255,255,.02);border-radius:8px;padding:8px 6px;text-align:center"><div style="font-size:9px;color:#475569;margin-bottom:3px">진입가</div><div style="font-size:10px;font-weight:700;color:#818CF8">$${s.entry?fp(s.entry,s.symbol):'—'}</div></div>
+      <div style="background:rgba(255,255,255,.02);border-radius:8px;padding:8px 6px;text-align:center"><div style="font-size:9px;color:#475569;margin-bottom:3px">SL</div><div style="font-size:10px;font-weight:700;color:#EF4444">$${s.stopLoss?fp(s.stopLoss,s.symbol):'—'}</div></div>
+      <div style="background:rgba(255,255,255,.02);border-radius:8px;padding:8px 6px;text-align:center"><div style="font-size:9px;color:#475569;margin-bottom:3px">TP</div><div style="font-size:10px;font-weight:700;color:#22C55E">$${s.takeProfit?fp(s.takeProfit,s.symbol):'—'}</div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">${[{l:s.trend,c:s.trend==='BULLISH'?'#22C55E':s.trend==='BEARISH'?'#EF4444':'#94A3B8'},{l:'RSI:'+s.rsiStatus,c:s.rsiStatus==='OVERSOLD'?'#22C55E':s.rsiStatus==='OVERBOUGHT'?'#EF4444':'#94A3B8'},{l:'MACD:'+s.macdBias,c:s.macdBias==='BULLISH'?'#22C55E':'#EF4444'},{l:'리스크:'+s.riskLevel,c:s.riskLevel==='LOW'?'#22C55E':s.riskLevel==='HIGH'?'#EF4444':'#F7931A'}].map(t=>`<div style="padding:3px 7px;border-radius:5px;font-size:9px;background:${t.c}18;border:1px solid ${t.c}44;color:${t.c}">${t.l}</div>`).join('')}</div>
+    <div style="background:rgba(255,255,255,.02);border-radius:8px;padding:10px;font-size:11px;color:#94A3B8;line-height:1.65">💬 ${s.reasoning}</div>
+  </div>
+  ${s.signal!=='HOLD'?`<div style="display:flex;gap:8px"><button onclick="execAiSignal()" style="flex:2;padding:12px;border-radius:9px;border:1px solid ${sigCol};background:${s.signal==='LONG'?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'};color:${sigCol};font-size:12px;font-weight:700">✅ AI 신호 실행</button><button onclick="aiSignal=null;renderAiSignal();updateSignalBadge()" style="flex:1;padding:12px;border-radius:9px;border:1px solid #1E293B;background:rgba(255,255,255,.02);color:#475569;font-size:11px">무시</button></div>`:''}`;
+}
+async function execAiSignal(){
+  if(!aiSignal)return;
+  const side=aiSignal.signal==='LONG'?'BUY':'SELL';
+  const amt=parseFloat(document.getElementById('orderAmt').value)||10;
+  const lev=parseInt(document.getElementById('levRange').value)||10;
+  await placeOrder(side,(amt/(prices[currentSymbol]||aiSignal.currentPrice))*lev,aiSignal.stopLoss,aiSignal.takeProfit);
+}
+function updateSignalBadge(){
+  const badge=document.getElementById('signalBadge'),tabAi=document.getElementById('tab-ai');
+  if(aiSignal&&aiSignal.symbol===currentSymbol){
+    const col=aiSignal.signal==='LONG'?'#22C55E':aiSignal.signal==='SHORT'?'#EF4444':'#94A3B8';
+    badge.style.display='block';badge.style.background=aiSignal.signal==='LONG'?'rgba(34,197,94,.1)':aiSignal.signal==='SHORT'?'rgba(239,68,68,.1)':'rgba(255,255,255,.03)';badge.style.border=`1px solid ${col}`;
+    document.getElementById('signalBadgeText').textContent=aiSignal.signal;document.getElementById('signalBadgeText').style.color=col;
+    document.getElementById('signalBadgeConf').textContent=aiSignal.confidence+'%';tabAi.textContent='AI ●';
+  }else{badge.style.display='none';tabAi.textContent='AI';}
+}
+
+function switchTab(name){
+  ['chart','ai','auto','pos','log'].forEach(t=>{
+    const pane=document.getElementById('pane-'+t),btn=document.getElementById('tab-'+t);
+    const active=t===name;
+    pane.style.display=active?'block':'none';
+    btn.style.background=active?'rgba(247,147,26,.12)':'rgba(255,255,255,.02)';
+    btn.style.color=active?'#F7931A':'#475569';
+    btn.style.borderBottom=active?'2px solid #F7931A':'2px solid transparent';
+    btn.style.fontWeight=active?'700':'400';
+  });
+  if(name==='pos')renderPositions();
+  if(name==='auto')loadAutoStatus();
+}
+
+window.addEventListener('load',()=>{
+  const saved=localStorage.getItem('apexUrl');
+  if(saved)document.getElementById('urlInput').value=saved;
+});
+</script>
+</body>
+</html>
